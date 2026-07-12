@@ -1,0 +1,8 @@
+slack-bolt
+python-dotenv
+neo4j
+anthropic
+mcp[cli]
+fastapi
+uvicorn
+httpx
