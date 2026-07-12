@@ -5,14 +5,16 @@ and handles interactive digest button clicks.
 """
 
 import os
+import threading
 from dotenv import load_dotenv
 from slack_bolt import App
 from slack_bolt.adapter.socket_mode import SocketModeHandler
+from flask import Flask
 
 from graph_db import GraphDB
 from graph_writer import MessageGraphWriter, extract_mentions
 from topic_extractor import extract_topics
-from blockkit_formatter import handle_tab_click,  send_digest_dm
+from blockkit_formatter import handle_tab_click, parse_digest_sections, send_digest_dm
 from digest_state_store import get_digest_state
 from digest_generator import generate_digest
 
@@ -175,6 +177,37 @@ def handle_digest_command(ack, body, logger):
 
 
 if __name__ == "__main__":
+    # Tiny health-check server so an external pinger (UptimeRobot,
+    # cron-job.org, etc.) can hit this every ~5-10 min and keep Render's
+    # free tier from spinning this process down due to inactivity.
+    # Socket Mode itself produces no inbound traffic, so without this,
+    # Render would sleep the bot even while it's actively listening.
+    health_app = Flask(__name__)
+
+    @health_app.route("/")
+    def health():
+        return "Crosstalk bot is alive", 200
+
+    def run_health_server():
+        port = int(os.environ.get("PORT", 10000))
+        print(f"🩺 Health server attempting to bind on 0.0.0.0:{port}...")
+        try:
+            # use_reloader=False and threaded=True explicitly, to avoid
+            # any signal-handling quirks from running Flask's dev server
+            # outside the main thread, and to handle pings without
+            # blocking on a slow request.
+            health_app.run(host="0.0.0.0", port=port, use_reloader=False, threaded=True)
+        except Exception:
+            # A crash here was previously SILENT — a daemon thread dying
+            # doesn't stop the process, it just quietly closes the port,
+            # which then fails Render's port scan with no visible reason.
+            # Print the full traceback so it shows up in Render logs.
+            import traceback
+            print("🩺 ❌ Health server crashed:")
+            traceback.print_exc()
+
+    threading.Thread(target=run_health_server, daemon=True).start()
+
     print("⚡️ Slack Digest Agent is starting...")
     handler = SocketModeHandler(app, os.environ.get("SLACK_APP_TOKEN"))
     handler.start()
