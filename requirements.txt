@@ -6,3 +6,4 @@ mcp[cli]
 fastapi
 uvicorn
 httpx
+flask
