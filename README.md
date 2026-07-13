@@ -1,4 +1,4 @@
-### Crosstalk-Personalized-Slack-Digest-Agent
+## Crosstalk-Personalized-Slack-Digest-Agent
 
 ## What it does
 
